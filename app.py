@@ -1,56 +1,69 @@
 import cv2
 import numpy as np
 
-def nothing(x):
-    # Função de callback exigida pelo trackbar, mas não precisamos fazer nada nela.
+def nada(x):
     pass
 
 # 1. Inicializa a captura da webcam
 cap = cv2.VideoCapture(0)
 
-# 2. Cria uma janela para exibir os resultados e o trackbar
-cv2.namedWindow("Ajuste de Threshold")
-
-# 3. Cria o trackbar (barra deslizante)
-# Nome, Janela, Valor Inicial, Valor Máximo, Função de Callback
-cv2.createTrackbar("Limite", "Ajuste de Threshold", 127, 255, nothing)
+# 2. Cria a janela e o Trackbar para o Limiar (Threshold)
+cv2.namedWindow("Parametros")
+cv2.createTrackbar("Limiar", "Parametros", 127, 255, nada)
 
 print("Pressione 'q' para sair.")
 
 while True:
-    # Captura frame por frame
     ret, frame = cap.read()
     if not ret:
         break
 
-    # Passo A: Converter para escala de cinza
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    # 3. Converte para Escala de Cinza
+    cinza = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-    # Passo B: Pegar o valor atual do trackbar
-    threshold_val = cv2.getTrackbarPos("Limite", "Ajuste de Threshold")
+    # 4. Obtém o valor atual do Trackbar
+    valor_limiar = cv2.getTrackbarPos("Limiar", "Parametros")
 
-    # Passo C: Aplicar o Threshold Binário
-    # Se o pixel > threshold_val, vira 255 (branco). Caso contrário, 0 (preto).
-    _, threshold_img = cv2.threshold(gray, threshold_val, 255, cv2.THRESH_BINARY)
+    # 5. Aplica o Threshold Binário
+    # Se o pixel > valor_limiar vira 255 (branco), senão 0 (preto)
+    _, threshold = cv2.threshold(cinza, valor_limiar, 255, cv2.THRESH_BINARY)
 
-    # Para exibir simultaneamente, vamos redimensionar e concatenar as imagens
-    # (Opcional: você pode apenas usar 3 cv2.imshow diferentes)
+    # --- LÓGICA DO HISTOGRAMA (Igual à imagem enviada) ---
+    # Calcula o histograma da imagem em cinza
+    hist = cv2.calcHist([cinza], [0], None, [256], [0, 256])
     
-    # Como 'frame' tem 3 canais (BGR) e as outras têm 1 (cinza), 
-    # precisamos converter as cinzas de volta para BGR apenas para visualização lado a lado.
-    gray_3ch = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
-    thresh_3ch = cv2.cvtColor(threshold_img, cv2.COLOR_GRAY2BGR)
+    # Cria uma imagem preta para desenhar o histograma (300px altura, 256px largura)
+    hist_img = np.zeros((300, 256, 3), dtype=np.uint8)
+    
+    # Normaliza o histograma para caber na altura da imagem
+    cv2.normalize(hist, hist, 0, 255, cv2.NORM_MINMAX)
+    
+    # Desenha as linhas brancas do histograma
+    for i in range(1, 256):
+        # Adicionamos o [0] para pegar o valor numérico puro do array
+        ponto_anterior = int(hist[i-1][0])
+        ponto_atual = int(hist[i][0])
+        
+        cv2.line(hist_img, (i-1, 300 - ponto_anterior), (i, 300 - ponto_atual), (255, 255, 255), 1)
+    
+    # Desenha a LINHA VERMELHA (ajustada para não dar erro)
+    cv2.line(hist_img, (valor_limiar, 0), (valor_limiar, 300), (0, 0, 255), 2)
+    # -----------------------------------------------------
 
-    # Empilha as imagens horizontalmente: Original | Cinza | Threshold
-    resultado = np.hstack((frame, gray_3ch, thresh_3ch))
+    # Redimensiona para caber tudo na tela (opcional)
+    frame_res = cv2.resize(frame, (400, 300))
+    cinza_res = cv2.cvtColor(cv2.resize(cinza, (400, 300)), cv2.COLOR_GRAY2BGR)
+    thresh_res = cv2.cvtColor(cv2.resize(threshold, (400, 300)), cv2.COLOR_GRAY2BGR)
 
-    # Exibe a janela única com as três visualizações
-    cv2.imshow("Ajuste de Threshold", resultado)
+    # Organiza a exibição (Original | Cinza | Threshold)
+    # O Histograma será exibido em uma janela separada para destaque
+    layout_superior = np.hstack((frame_res, cinza_res, thresh_res))
 
-    # Interrompe o loop ao pressionar a tecla 'q'
+    cv2.imshow("Aplicacao Threshold - Original | Cinza | Binario", layout_superior)
+    cv2.imshow("Histograma e Limiar", hist_img)
+
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
-# Libera a câmera e fecha as janelas
 cap.release()
 cv2.destroyAllWindows()
